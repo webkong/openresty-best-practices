@@ -8,7 +8,7 @@
 
 作为开发人员，在日常编码中，难免会范一些低级错误，比如少个括号，少个逗号，使用了未定义变量等等，我们往往会使用编辑器的 lint 插件来检测此类错误。
 
-对于我们 Openresty 开发中，日常开发的都是 Lua 代码，所以我们可以使用 [Luacheck](https://github.com/mpeterv/luacheck) 这款静态代码检测工具来帮助我们检查，比较好的一点是这款工具对 ngx_lua 做了一些支持，我们使用的 ngx 变量在开启了配置 `--std ngx_lua` 后即可被 luacheck 识别，而不会被认为是未定义的变量。
+对于我们 OpenResty 开发中，日常开发的都是 Lua 代码，所以我们可以使用 [luacheck](https://github.com/mpeterv/luacheck) 这款静态代码检测工具来帮助我们检查，比较好的一点是这款工具对 ngx_lua 做了一些支持，我们使用的 ngx 变量在开启了配置 `--std ngx_lua` 后即可被 luacheck 识别，而不会被认为是未定义的变量。
 
 我们可以通过 luarocks 来安装:
 
@@ -50,6 +50,46 @@ Total: 10 warnings / 1 error in 5 files
 当然你也可以指定一些参数来运行 luacheck，常见的有 std、ignore、globals 等，我们一般会必选上 `--std ngx_lua` 来识别 ngx_lua 的全局变量，具体的规则可以查看 [官方文档](http://luacheck.readthedocs.io/en/stable/cli.html#command-line-options)
 
 除了使用命令行参数，luacheck 还支持使用配置文件的形式，这也是我们推荐的做法。luacheck 使用时会优先查找当前目录下的 `.luacheckrc` 文件，未找到则去上层目录查找，以此类推。所以我们可以在项目的根目录下放置一个我们配置好的 `.luacheckrc` 文件以便之后使用。
+
+一个 `.luacheckrc` 大概是这样子的：
+```lua
+-- .luacheckrc 文件其实就是个 lua 代码文件
+cache = true
+std = 'ngx_lua'
+ignore = {
+    "_", -- 忽略 _ 变量，我们用它来表示没有用到的变量
+    "6..", -- 忽略格式上的warning
+}
+-- 这里因为客观原因，定的比较松。如果条件允许，你可以去掉这些豁免条例。
+unused = false
+unused_args = false
+unused_secondaries = false
+redefined = false
+-- top-level module name
+globals = {
+    -- 标记 ngx.header and ngx.status 是可以被写入的
+    "ngx",
+}
+
+-- 因为历史遗留原因，我们代码里有部分采用了旧风格的 module(..., package.seeall)
+-- 来定义模块。下面一行命令用于找出这一类文件，并添加豁免的规则。
+-- find -name '*.lua' -exec grep '^module(' -l {} \; | awk '{ print "\""$0"\"," }'
+local old_style_modules = {
+    -- ...
+}
+for _, path in ipairs(old_style_modules) do
+    files[path].module = true
+    files[path].allow_defined_top = true
+end
+
+-- 对用了 busted 测试框架的测试文件添加额外的标准
+files["test/*_spec.lua"].std = "+busted"
+
+-- 不检查来自第三方的代码库
+exclude_files = {
+    "nginx/resty",
+}
+```
 
 luacheck 也可以集成进编辑器使用，支持的有 Vim，Sublime Text，Atom，Emacs，Brackets。基本主流的编辑器都有支持。具体可以看相应的 [使用文档](https://github.com/mpeterv/luacheck#editor-support)，这里就不做说明了。
 
